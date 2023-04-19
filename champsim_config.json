@@ -56,7 +56,7 @@
 
     "L1D": {
         "sets": 64,
-        "ways": 12,
+        "ways": 16,
         "rq_size": 64,
         "wq_size": 64,
         "pq_size": 8,
@@ -67,7 +67,8 @@
         "prefetch_as_load": false,
         "virtual_prefetch": false,
         "prefetch_activate": "LOAD,PREFETCH",
-        "prefetcher": "no"
+        "prefetcher": "no",
+        "replacement": "eva"
     },
 
     "L2C": {
@@ -155,7 +156,7 @@
         "virtual_prefetch": false,
         "prefetch_activate": "LOAD,PREFETCH",
         "prefetcher": "no",
-        "replacement": "eva"
+        "replacement": "lru"
     },
 
     "physical_memory": {

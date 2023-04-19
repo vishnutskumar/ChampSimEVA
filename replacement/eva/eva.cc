@@ -4,6 +4,8 @@
 #include <iterator>
 #include <limits>
 #include <numeric>
+#include <iostream>
+#include <fstream>
 
 #include "cache.h"
 #include "util.h"
@@ -48,17 +50,19 @@ std::vector<uint32_t> classIds;
 std::vector<Class*> classes;
 
 uint64_t now;
-uint64_t accsPerInterval = 128 * 1024; // Need to confirm
-uint64_t maxAge = 10000;               // Need to find value
-double ewmaDecay = 0.5;                // Need to find value
+uint64_t accsPerInterval = 2 * 1024; // Need to confirm
+uint64_t maxAge = 500;               // Need to find value
+double ewmaDecay = 1;                // Need to find value
 uint64_t ageScaling = 1;               // Need to find value
 uint64_t nextUpdate = accsPerInterval;
 uint64_t numLines;
 uint64_t wrapArounds;
+std::ofstream output_file("eva_ages.txt", std::ios::out | std::ios::trunc);
 
 // Remember to turn off prefetching in the config file
 void CACHE::initialize_replacement()
-{
+{ 
+
   classes.resize(NUM_CLASSES);
   classes[NONREUSED] = new Class;
   classes[REUSED] = new Class;
@@ -267,6 +271,11 @@ void update(uint32_t cache_lineID, uint8_t hit)
 
   if (--nextUpdate == 0) {
     reconfigure_cl();
+      for (auto* cl : classes) { // VTS: LInes 11 - 15 in Pseudo Code
+        for (uint32_t a = 0; a < maxAge; a++) {
+          output_file << a <<","<< cl->ranks[a] << "\n";
+        }
+      }
     reset();
   }
 }

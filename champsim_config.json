@@ -68,7 +68,7 @@
         "virtual_prefetch": false,
         "prefetch_activate": "LOAD,PREFETCH",
         "prefetcher": "no",
-        "replacement": "eva"
+        "replacement": "lru"
     },
 
     "L2C": {

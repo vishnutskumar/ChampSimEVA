@@ -6,6 +6,7 @@
 #include <numeric>
 #include <iostream>
 #include <fstream>
+#include <string>
 
 #include "cache.h"
 #include "util.h"
@@ -57,7 +58,7 @@ uint64_t ageScaling = 1;               // Need to find value
 uint64_t nextUpdate = accsPerInterval;
 uint64_t numLines;
 uint64_t wrapArounds;
-std::ofstream output_file("eva_ages.txt", std::ios::out | std::ios::trunc);
+std::ofstream output_file(std::to_string(maxAge)+"eva_ages.txt", std::ios::out | std::ios::trunc);
 
 // Remember to turn off prefetching in the config file
 void CACHE::initialize_replacement()
@@ -316,7 +317,7 @@ uint32_t CACHE::find_victim(uint32_t cpu, uint64_t instr_id, uint32_t set, const
   }
   timestamps[cache_lineID] = 0;
   classIds[cache_lineID] = NONREUSED;
-  // cout << "Best Cand :" <<  bestCand << "\n";
+  // cout << "Best Cand :" <<  bestCand - begin << "\n";
   return bestCand - begin;
 }
 

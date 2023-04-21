@@ -154,9 +154,9 @@ void eva_calc(double lineGain, Class* cl)
   }
 
   uint32_t a = maxAge - 1;
-  cl->hitProbability[a] = (totalEventsAbove[a] > 1e-2) ? 0.5 * cl->ewmaHits[a] / totalEventsAbove[a] : 0.;
-  cl->expectedLifetime[a] = ageScaler(a);
-  double expectedLifetimeUnconditioned = ageScaler(a) * totalEventsAbove[a];
+  cl->hitProbability[a] = (totalEventsAbove[a] > 1e-2) ? cl->ewmaHits[a] / totalEventsAbove[a] : 0.;
+  cl->expectedLifetime[a] = 0;
+  double expectedLifetimeUnconditioned =  totalEventsAbove[a];
   double totalHitsAbove = cl->ewmaHits[a];
 
   // short lines
@@ -165,16 +165,15 @@ void eva_calc(double lineGain, Class* cl)
   // coarsened region.
   for (uint32_t a = maxAge - 2; a < maxAge; a--) {
     if (totalEventsAbove[a] > 1e-2) {
-      cl->hitProbability[a] = (0.5 * cl->ewmaHits[a] + totalHitsAbove) / (0.5 * events[a] + totalEventsAbove[a + 1]); // Total Events above age a is equal to the total lifetimes above age a
-      cl->expectedLifetime[a] = ((1. / 6) * ageScaler(a) * events[a] + expectedLifetimeUnconditioned) / (0.5 * events[a] + totalEventsAbove[a + 1]);
-      // info("ageScaler at %u is a %g", a, aging->ageScaler(a));
+      cl->hitProbability[a] = (cl->ewmaHits[a] + totalHitsAbove) / totalEventsAbove[a]; // Total Events above age a is equal to the total lifetimes above age a
+      cl->expectedLifetime[a] =  (expectedLifetimeUnconditioned) / totalEventsAbove[a];
     } else {
       cl->hitProbability[a] = 0.;
       cl->expectedLifetime[a] = 0.;
     }
 
     totalHitsAbove += cl->ewmaHits[a];
-    expectedLifetimeUnconditioned += ageScaler(a) * totalEventsAbove[a];
+    expectedLifetimeUnconditioned += totalEventsAbove[a];
   }
 
   // finally, compute EVA from the probabilities and lifetimes
@@ -188,14 +187,12 @@ void eva_calc(double lineGain, Class* cl)
   }
 }
 
-void reconfigure()
+double reconfigure()
 {
   uint64_t intervalHits = 0;
   uint64_t intervalEvictions = 0;
   uint64_t ewmaHits = 0;
   uint64_t ewmaEvictions = 0;
-  uint64_t cumHits = 0;
-  uint64_t cumEvictions = 0;
 
   for (auto* cl : classes) { // VTS: Line 2 in Pseudo Code
     update_cl(cl);
@@ -206,8 +203,9 @@ void reconfigure()
     ewmaHits += std::accumulate(cl->ewmaHits.begin(), cl->ewmaHits.end(), 0);
     ewmaEvictions += std::accumulate(cl->ewmaEvictions.begin(), cl->ewmaEvictions.end(), 0);
 
-    cumHits += cl->cumulativeHits;
-    cumEvictions += cl->cumulativeEvictions;
+    // ewmaHits += std::accumulate(cl->hits.begin(), cl->hits.end(), 0);
+    // ewmaEvictions += std::accumulate(cl->evictions.begin(), cl->evictions.end(), 0);
+
   }
 
   double lineGain = 1. * ewmaHits / (ewmaHits + ewmaEvictions) / numLines; // VTS : Algorithm Line 3: (1-m)/S -> Hit_Rate/Cache_Size
@@ -228,11 +226,12 @@ void reconfigure()
   // assert(accesses == accsPerInterval);
 
   // ageScaling = newAgeScaling;
+  return lineGain;
 }
 
-void reconfigure_cl()
+double reconfigure_cl()
 {
-  reconfigure();
+  double lineGain = reconfigure();
 
   // Class* rc = classes[REUSED];
   // Class* nc = classes[NONREUSED];
@@ -257,6 +256,7 @@ void reconfigure_cl()
   //     cl->ranks[a] += (averageMissRate - (1 - cl->hitProbability[a])) / reusedMissRate * reusedLifetimeBias;
   //   }
   // }
+  return lineGain;
 }
 
 void update(uint32_t cache_lineID, uint8_t hit)
@@ -269,14 +269,17 @@ void update(uint32_t cache_lineID, uint8_t hit)
 
   // age update
   UpdtAge(cache_lineID);
-
+  static int count = 0;
   if (--nextUpdate == 0) {
-    reconfigure_cl();
+    double lineGain = reconfigure_cl();
+    if((count%10)==0){
       for (auto* cl : classes) { // VTS: LInes 11 - 15 in Pseudo Code
         for (uint32_t a = 0; a < maxAge; a++) {
-          output_file << a <<","<< cl->ranks[a] << "\n";
+          output_file << cl->ranks[a] <<","<< cl->hitProbability[a] << ","<< cl->opportunityCost[a] << "\n";
         }
       }
+    }
+    count++;
     reset();
   }
 }

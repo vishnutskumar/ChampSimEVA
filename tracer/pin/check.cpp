@@ -8,7 +8,7 @@
 
 int main(){
     int a;
-    uint64_t *V_small = new uint64_t[ARR_SIZESMALL];
+    uint64_t *V_small = new uint64_t[ARR_SIZESMALL];  // Uint64_t used since we need 16K Lines
     uint64_t *V_big = new uint64_t[ARR_SIZEBIG];
     uint64_t i = 0;
     while(1){

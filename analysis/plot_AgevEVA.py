@@ -3,12 +3,14 @@ import csv
 import numpy as np
 import imageio
 
+
 MIN_COUNT = 0
 MAX_COUNT = 300 #number of EVA data ranges
 MAX_AGE = 500
 PLOT_FREQ = 20 # Plot every nth EVA range
 
-with open('500eva_ages.txt', newline='') as csvfile:
+
+with open('../'+str(MAX_AGE)+'eva_ages.txt', newline='') as csvfile:
     reader = csv.reader(csvfile, delimiter=',')
     data = list(reader)
 
@@ -27,7 +29,8 @@ for rec in np.arange(MIN_COUNT, MAX_COUNT, PLOT_FREQ):
             plt.plot(age, eva, label = "NON-REUSED");
         plt.xlabel("age")
         plt.ylabel("eva")
-        plt.ylim([-100, 10])
+        plt.ylim([-10, 5])
+        # plt.ylim([2.5, 3])
         plt.legend(loc='lower right')
 
     plt.savefig(f'./img/img_{id}.png',

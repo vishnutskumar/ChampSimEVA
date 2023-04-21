@@ -55,7 +55,7 @@
     },
 
     "L1D": {
-        "sets": 64,
+        "sets": 4096,
         "ways": 16,
         "rq_size": 64,
         "wq_size": 64,

@@ -11,7 +11,7 @@
 #include "cache.h"
 #include "util.h"
 
-enum CLASSES { NONREUSED = 0, REUSED = 1, NUM_CLASSES };
+enum CLASSES { NONREUSED = 0, NUM_CLASSES };
 
 struct Class {
   // ranks, higher is better; could be stored as eviction order instead
@@ -52,7 +52,7 @@ std::vector<Class*> classes;
 
 uint64_t now;
 uint64_t accsPerInterval = 2 * 1024; // Need to confirm
-uint64_t maxAge = 500;               // Need to find value
+uint64_t maxAge = 300*1024;               // Need to find value
 double ewmaDecay = 1;                // Need to find value
 uint64_t ageScaling = 1;               // Need to find value
 uint64_t nextUpdate = accsPerInterval;
@@ -66,7 +66,7 @@ void CACHE::initialize_replacement()
 
   classes.resize(NUM_CLASSES);
   classes[NONREUSED] = new Class;
-  classes[REUSED] = new Class;
+  // classes[REUSED] = new Class;
   numLines = NUM_SET * NUM_WAY;
   classIds.resize(numLines, 0);
   timestamps.resize(numLines, 0);
@@ -165,7 +165,7 @@ void eva_calc(double lineGain, Class* cl)
   // coarsened region.
   for (uint32_t a = maxAge - 2; a < maxAge; a--) {
     if (totalEventsAbove[a] > 1e-2) {
-      cl->hitProbability[a] = (0.5 * cl->ewmaHits[a] + totalHitsAbove) / (0.5 * events[a] + totalEventsAbove[a + 1]);
+      cl->hitProbability[a] = (0.5 * cl->ewmaHits[a] + totalHitsAbove) / (0.5 * events[a] + totalEventsAbove[a + 1]); // Total Events above age a is equal to the total lifetimes above age a
       cl->expectedLifetime[a] = ((1. / 6) * ageScaler(a) * events[a] + expectedLifetimeUnconditioned) / (0.5 * events[a] + totalEventsAbove[a + 1]);
       // info("ageScaler at %u is a %g", a, aging->ageScaler(a));
     } else {
@@ -234,29 +234,29 @@ void reconfigure_cl()
 {
   reconfigure();
 
-  Class* rc = classes[REUSED];
-  Class* nc = classes[NONREUSED];
+  // Class* rc = classes[REUSED];
+  // Class* nc = classes[NONREUSED];
 
-  // VTS : Calculations for lines 11 & 12
-  uint64_t reusedHits = std::accumulate(rc->ewmaHits.begin(), rc->ewmaHits.end(), 1);
-  uint64_t reusedEvictions = std::accumulate(rc->ewmaEvictions.begin(), rc->ewmaEvictions.end(), 1);
-  double reusedMissRate = 1. * reusedEvictions / (reusedHits + reusedEvictions);
+  // // VTS : Calculations for lines 11 & 12
+  // uint64_t reusedHits = std::accumulate(rc->ewmaHits.begin(), rc->ewmaHits.end(), 1);
+  // uint64_t reusedEvictions = std::accumulate(rc->ewmaEvictions.begin(), rc->ewmaEvictions.end(), 1);
+  // double reusedMissRate = 1. * reusedEvictions / (reusedHits + reusedEvictions);
 
-  uint64_t nonReusedHits = std::accumulate(nc->ewmaHits.begin(), nc->ewmaHits.end(), 1);
-  uint64_t nonReusedEvictions = std::accumulate(nc->ewmaEvictions.begin(), nc->ewmaEvictions.end(), 1);
-  double nonReusedMissRate = 1. * nonReusedEvictions / (nonReusedHits + nonReusedEvictions);
+  // uint64_t nonReusedHits = std::accumulate(nc->ewmaHits.begin(), nc->ewmaHits.end(), 1);
+  // uint64_t nonReusedEvictions = std::accumulate(nc->ewmaEvictions.begin(), nc->ewmaEvictions.end(), 1);
+  // double nonReusedMissRate = 1. * nonReusedEvictions / (nonReusedHits + nonReusedEvictions);
 
-  uint64_t totalHits = reusedHits + nonReusedHits;
-  uint64_t totalEvictions = reusedEvictions + nonReusedEvictions;
-  double averageMissRate = 1. * totalEvictions / (totalHits + totalEvictions);
+  // uint64_t totalHits = reusedHits + nonReusedHits;
+  // uint64_t totalEvictions = reusedEvictions + nonReusedEvictions;
+  // double averageMissRate = 1. * totalEvictions / (totalHits + totalEvictions);
 
-  double reusedLifetimeBias = rc->ranks[0];
+  // double reusedLifetimeBias = rc->ranks[0];
 
-  for (auto* cl : classes) { // VTS: LInes 11 - 15 in Pseudo Code
-    for (uint32_t a = maxAge - 1; a < maxAge; a--) {
-      cl->ranks[a] += (averageMissRate - (1 - cl->hitProbability[a])) / reusedMissRate * reusedLifetimeBias;
-    }
-  }
+  // for (auto* cl : classes) { // VTS: LInes 11 - 15 in Pseudo Code
+  //   for (uint32_t a = maxAge - 1; a < maxAge; a--) {
+  //     cl->ranks[a] += (averageMissRate - (1 - cl->hitProbability[a])) / reusedMissRate * reusedLifetimeBias;
+  //   }
+  // }
 }
 
 void update(uint32_t cache_lineID, uint8_t hit)
@@ -330,7 +330,7 @@ void CACHE::update_replacement_state(uint32_t cpu, uint32_t set, uint32_t way, u
     return;
   uint32_t cache_lineID = (set * NUM_WAY) + way;
   update(cache_lineID, hit); // Equivalent to update2 in ZSIM
-  classIds[cache_lineID] = hit ? REUSED : NONREUSED;
+  classIds[cache_lineID] = NONREUSED;
 }
 
 void CACHE::replacement_final_stats() {}

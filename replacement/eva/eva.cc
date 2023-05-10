@@ -1,11 +1,11 @@
 #include <algorithm>
 #include <cmath>
+#include <fstream>
 #include <iomanip>
+#include <iostream>
 #include <iterator>
 #include <limits>
 #include <numeric>
-#include <iostream>
-#include <fstream>
 #include <string>
 
 #include "cache.h"
@@ -51,18 +51,19 @@ std::vector<uint32_t> classIds;
 std::vector<Class*> classes;
 
 uint64_t now;
-uint64_t accsPerInterval = 2 * 1024; // Need to confirm
-uint64_t maxAge = 300*1024;               // Need to find value
-double ewmaDecay = 1;                // Need to find value
-uint64_t ageScaling = 1;               // Need to find value
+uint64_t accsPerInterval = 32; // Need to confirm
+uint64_t maxAge = 10 * 1024;    // Need to find value
+double ewmaDecay = 1;          // Need to find value
+uint64_t ageScaling = 1;       // Need to find value
 uint64_t nextUpdate = accsPerInterval;
 uint64_t numLines;
 uint64_t wrapArounds;
-std::ofstream output_file(std::to_string(maxAge)+"eva_ages.txt", std::ios::out | std::ios::trunc);
+std::ofstream output_file(std::to_string(maxAge) + "eva_ages.txt", std::ios::out | std::ios::trunc);
+std::ofstream outputevents_file(std::to_string(maxAge) + "ewmevents_ages.txt", std::ios::out | std::ios::trunc);
 
 // Remember to turn off prefetching in the config file
 void CACHE::initialize_replacement()
-{ 
+{
 
   classes.resize(NUM_CLASSES);
   classes[NONREUSED] = new Class;
@@ -91,6 +92,7 @@ void CACHE::initialize_replacement()
 }
 uint64_t age(uint32_t cache_lineID)
 { // Zsim Aging->age()
+  uint64_t set = cache_lineID / 16;
   uint64_t exact = now - timestamps[cache_lineID];
   uint64_t coarse = exact / ageScaling;
   uint64_t mod = coarse % maxAge;
@@ -99,7 +101,7 @@ uint64_t age(uint32_t cache_lineID)
 
 void UpdtAge(uint32_t cache_lineID)
 { // Zsim Aging->update()
-  now++;
+  // now++;
 
   // check for wraparounds
   uint64_t exact = now - timestamps[cache_lineID]; // VTS - exact is the lifetime
@@ -148,6 +150,11 @@ void eva_calc(double lineGain, Class* cl)
   std::vector<double> totalEventsAbove(maxAge + 1);
   totalEventsAbove[maxAge] = 0.;
 
+  // std::vector<double> hits_last(1000);
+  // std::vector<double>::iterator first = cl->ewmaHits.begin() + 4000;
+
+  // std::copy(first, cl->ewmaHits.end(), hits_last.begin());
+
   for (uint32_t a = maxAge - 1; a < maxAge; a--) { // VTS : a is uint and will wrap around after it crosses zero, effectively terminating the loop
     events[a] = cl->ewmaHits[a] + cl->ewmaEvictions[a];
     totalEventsAbove[a] = totalEventsAbove[a + 1] + events[a];
@@ -156,7 +163,7 @@ void eva_calc(double lineGain, Class* cl)
   uint32_t a = maxAge - 1;
   cl->hitProbability[a] = (totalEventsAbove[a] > 1e-2) ? cl->ewmaHits[a] / totalEventsAbove[a] : 0.;
   cl->expectedLifetime[a] = 0;
-  double expectedLifetimeUnconditioned =  totalEventsAbove[a];
+  double expectedLifetimeUnconditioned = totalEventsAbove[a];
   double totalHitsAbove = cl->ewmaHits[a];
 
   // short lines
@@ -166,7 +173,7 @@ void eva_calc(double lineGain, Class* cl)
   for (uint32_t a = maxAge - 2; a < maxAge; a--) {
     if (totalEventsAbove[a] > 1e-2) {
       cl->hitProbability[a] = (cl->ewmaHits[a] + totalHitsAbove) / totalEventsAbove[a]; // Total Events above age a is equal to the total lifetimes above age a
-      cl->expectedLifetime[a] =  (expectedLifetimeUnconditioned) / totalEventsAbove[a];
+      cl->expectedLifetime[a] = (expectedLifetimeUnconditioned) / totalEventsAbove[a];
     } else {
       cl->hitProbability[a] = 0.;
       cl->expectedLifetime[a] = 0.;
@@ -176,8 +183,13 @@ void eva_calc(double lineGain, Class* cl)
     expectedLifetimeUnconditioned += totalEventsAbove[a];
   }
 
-  // finally, compute EVA from the probabilities and lifetimes
-  for (uint32_t a = maxAge - 1; a < maxAge; a--) {
+  for (uint32_t a = 0; a < maxAge; a++) {
+    outputevents_file << cl->ewmaHits[a] << "," << cl->ewmaEvictions[a] << "," << totalEventsAbove[a] << "\n";
+  }
+
+      // finally, compute EVA from the probabilities and lifetimes
+      for (uint32_t a = maxAge - 1; a < maxAge; a--)
+  {
     if (std::isnan(lineGain)) { // VTS : line gain is perAccessCost
       cl->opportunityCost[a] = 0.;
     } else {
@@ -205,7 +217,6 @@ double reconfigure()
 
     // ewmaHits += std::accumulate(cl->hits.begin(), cl->hits.end(), 0);
     // ewmaEvictions += std::accumulate(cl->evictions.begin(), cl->evictions.end(), 0);
-
   }
 
   double lineGain = 1. * ewmaHits / (ewmaHits + ewmaEvictions) / numLines; // VTS : Algorithm Line 3: (1-m)/S -> Hit_Rate/Cache_Size
@@ -261,6 +272,7 @@ double reconfigure_cl()
 
 void update(uint32_t cache_lineID, uint8_t hit)
 {
+  now++;
   if (hit) {
 
     uint32_t classID = classIds[cache_lineID];
@@ -271,11 +283,14 @@ void update(uint32_t cache_lineID, uint8_t hit)
   UpdtAge(cache_lineID);
   static int count = 0;
   if (--nextUpdate == 0) {
-    double lineGain = reconfigure_cl();
-    if((count%10)==0){
+    reconfigure_cl();
+    // if (count % 100 == 0) {
+    //   std::cout << count << "\n";
+    // }
+    if ((count % 10) == 0) {
       for (auto* cl : classes) { // VTS: LInes 11 - 15 in Pseudo Code
         for (uint32_t a = 0; a < maxAge; a++) {
-          output_file << cl->ranks[a] <<","<< cl->hitProbability[a] << ","<< cl->opportunityCost[a] << "\n";
+          output_file << cl->ranks[a] << "," << cl->hitProbability[a] << "," << cl->opportunityCost[a] << "\n";
         }
       }
     }
@@ -331,6 +346,7 @@ void CACHE::update_replacement_state(uint32_t cpu, uint32_t set, uint32_t way, u
 
   if (hit && type == WRITEBACK) // need to understand
     return;
+  // cout << set << ": "<< NAME << "\n";
   uint32_t cache_lineID = (set * NUM_WAY) + way;
   update(cache_lineID, hit); // Equivalent to update2 in ZSIM
   classIds[cache_lineID] = NONREUSED;
